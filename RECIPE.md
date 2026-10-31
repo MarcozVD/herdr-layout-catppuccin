@@ -34,6 +34,9 @@ Left to right, at zoom 1:
 Other theme colors: `surface` `#1a1d2d`, `popover` `#20202e`, `raised`
 `#313244`, `hover` `#cdd6f41a`, `selected` `#60b9fc38`, `input` `#ffffff33`,
 `muted` `#a6adc8`, `dim` `#7f849c`; buttons are `#60b9fc` with `#14151c` text.
+- **Project icons on the space avatars**: in the Spaces list, each space whose
+  project has an icon shows it on its 18px avatar (radius 5), in full color.
+  Spaces without one keep Herdr's colored letter tile.
 
 ## How it behaves
 
@@ -47,6 +50,18 @@ Other theme colors: `surface` `#1a1d2d`, `popover` `#20202e`, `raised`
   top-center grip.
 - The theme follows the system appearance; Settings > Look can pick another
   theme for this layout.
+- **Project icons**: for each space on this computer, the `spaces-icons` mod
+  looks in its project folder (the git repo's top, else where its first terminal
+  is, else where the space was made; never the home folder) for, in this order:
+  `.herdr/icon.svg|png` (an override), Tauri icons
+  (`src-tauri/icons/128x128@2x.png`, `128x128.png`, `icon.png`), `icon.*`,
+  `logo.*`, `assets/`, `build/`, `resources/`, `src/app/`, `public/`,
+  `src/assets/`, `.github/`, `docs/` logos and icons, then favicons
+  (`public/favicon.svg`, ...). Each candidate is tried in the folder itself, its
+  subfolders and `apps/*` / `packages/*`, so monorepos work. The first hit
+  wins; PNGs under 16px wide are skipped as placeholders. Icons appear a few
+  seconds after start the first time, then at once (remembered in shared
+  state), and a project gets looked at again on the next start.
 
 ## Built from
 
@@ -57,7 +72,7 @@ Other theme colors: `surface` `#1a1d2d`, `popover` `#20202e`, `raised`
   divider 1px `border`.
   - `sidebar` (column, 268px, `chrome`, `resizable: false`): `brand` block
     (46px, `window_drag`, mod `workspace-chrome`), `sidebar-lists` column with
-    `spaces` and `agents` blocks (weight 1, min 90), `sidebar-footer` block
+    `spaces` (mod `spaces-icons`) and `agents` blocks (weight 1, min 90), `sidebar-footer` block
     (69px, mod `workspace-chrome`, props `{ "footer": true }`).
   - `work` (column, `resizable: false`): `tabs` block (42px, `window_drag`, mod
     `tabs`), `work-body` row (padding 8, gap 8) with `main` block
@@ -66,9 +81,9 @@ Other theme colors: `surface` `#1a1d2d`, `popover` `#20202e`, `raised`
     `pane`, 30px, top, `reveal: "always"`) and a hidden `panel` column (368px)
     holding a `stack` of `files` and `changes` blocks; `status` block (28px, mod
     `workspace-status`).
-- Mods: only shipped ones (`workspace-chrome`, `spaces`, `agents`, `tabs`,
-  `pane`, `files`, `changes`, `workspace-status`). No custom code, no
-  programs run, no network.
+- Mods: `spaces-icons` (below) for the Spaces list, and the shipped
+  `workspace-chrome`, `agents`, `tabs`, `pane`, `files`, `changes`,
+  `workspace-status`.
 - `themes/herdr-catppuccin.json` and `themes/herdr-catppuccin-latte.json`, generated from
   herdr-desk's tokens (Catppuccin Mocha / Latte, as transcribed from herdr):
   - `background` = herdr `panel_bg`, `foreground` = `text`, `selection` =
@@ -81,8 +96,40 @@ Other theme colors: `surface` `#1a1d2d`, `popover` `#20202e`, `raised`
     `panel_bg`; `hover` = text at 10%, `selected` = accent at 22%, `border`
     white at 14% (light: black at 12%), `input` white 20% (black 16%), `muted`
     = `subtext0`, `dim` = `overlay1`, status colors as above.
+- `mods/spaces-icons/`: a clone of the shipped `spaces` mod
+  (`herdr-app do mod.clone '{"name":"spaces","as":"spaces-icons"}'`), used by the
+  `spaces` block instead of `spaces`. Its changes:
+  - `icons.js`: `findIcon(root)` lists the folders once (`fs.readdir`), skips
+    candidates whose first path part isn't there, checks the rest with
+    `fs.exists`, reads a PNG's width from its header, and copies the hit into
+    `data/spaces-icons/<hash of path>.<svg|png>` in the Herdr home, because
+    `image()` only reads paths relative to the home. SVGs are copied as text
+    (`fs.readFile` utf8 + `fs.writeFile`); PNGs with `exec("cmd", ["/c",
+    "copy", "/y", src, dest])` on Windows, `exec("cp", [src, dest])` elsewhere.
+  - `main.js`: `roots(space, panes)` gives the project folders,
+    `lookForIcons` runs in the 250ms `checkNew` tick and searches each folder
+    once per run, results go to `this.icons` and `setShared("spaces-icons.found",
+    {folder: path|null})`; `init` starts from that shared map. `grouped` reads
+    `panes()` once per render and passes each row its `icon`; `row` draws
+    `div().size(18).rounded(5).overflow_hidden().child(image(icon).size(18))`,
+    else the original letter tile. Everything else is the shipped `spaces`.
 
 ## Watch out
+
+- `spaces-icons` reads files outside its own folder (the projects of your
+  spaces) and runs a program to copy PNG icons (`cmd /c copy` on Windows,
+  `cp` elsewhere). It writes only under `data/spaces-icons/` and the shared key
+  `spaces-icons.found`. No network.
+- `image("C:/abs/path.png")` draws nothing: icons must be copied into the home.
+  `fs.writeFile` with the `Uint8Array` from `fs.readFile` wrote 0-byte files
+  in this build, hence the system copy for PNGs.
+- Reading `panes()` inside each row made the list too slow to render ("This view
+  could not be re-rendered"); read it once per render.
+- Spaces on other machines and the `~` space keep the letter tile. `.ico`
+  favicons aren't used (GPUI doesn't draw them). A changed icon file shows after
+  the next start; delete `data/spaces-icons/` and the shared key to forget all.
+- The rail (sidebar narrower than 160px) shows numbers, as the shipped mod does,
+  not icons.
 
 - The theme files are named differently from the layout on purpose: a theme
   named like a layout (`themes/catppuccin.json`) would belong only to that layout,
@@ -105,3 +152,7 @@ Other theme colors: `surface` `#1a1d2d`, `popover` `#20202e`, `raised`
 - In light appearance the terminal reads `#eff1f5` with `#4c4f69` text.
 - `themes()` from a mod lists `herdr-catppuccin` (`light: false`) and
   `herdr-catppuccin-latte` (`light: true`) with those colors.
+- `herdr-app check mods/spaces-icons` passes.
+- A space whose repo has `src-tauri/icons/128x128.png` shows that picture on its
+  avatar within about 10 seconds, and `data/spaces-icons/` holds a non-empty copy;
+  a space with no icon file shows its colored letter.
