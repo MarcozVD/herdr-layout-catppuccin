@@ -99,7 +99,7 @@
           },
           "window_drag": true,
           "content": {
-            "mod": "tabs"
+            "mod": "tabs-graph"
           }
         },
         {
@@ -164,6 +164,13 @@
                       "type": "block",
                       "content": {
                         "mod": "changes"
+                      }
+                    },
+                    {
+                      "id": "graph",
+                      "type": "block",
+                      "content": {
+                        "mod": "git-graph"
                       }
                     }
                   ]
